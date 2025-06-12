@@ -1,0 +1,6 @@
+app = "shaik-bot"
+primary_region = "sin"
+
+[env]
+  TELEGRAM_TOKEN = ""
+  CHAT_ID = ""
