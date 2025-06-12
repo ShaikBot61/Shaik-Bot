@@ -106,7 +106,7 @@ def run_bot():
     analyze_market("XAUUSDT", "XAUUSD")
 
 # Schedule every 1 hour
-schedule.every(1).hours.do(run_bot)
+schedule.every(1).minutes.do(run_bot)
 
 print("Shaik Bot Started... 🚀")
 while True:
