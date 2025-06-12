@@ -1,56 +1,114 @@
 import os
 import requests
+import pandas as pd
+import schedule
+import time
 from dotenv import load_dotenv
+import telegram
+from ta.momentum import RSIIndicator
+from ta.trend import MACD, EMAIndicator
 
+# Load environment variables
 load_dotenv()
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-def send_signal():
-    message = """
-📡 *SHAiK BOT SIGNAL 🔥*
+bot = telegram.Bot(token=BOT_TOKEN)
 
-🔴 *Signal Type:* SELL  
-📊 *Pair:* BTCUSD  
-🕒 *Timeframe:* H1
+def fetch_price_data(symbol):
+    url = f'https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100'
+    response = requests.get(url)
+    data = response.json()
+
+    df = pd.DataFrame(data, columns=[
+        'timestamp', 'open', 'high', 'low', 'close', 'volume',
+        'close_time', 'quote_asset_volume', 'num_trades',
+        'taker_buy_base', 'taker_buy_quote', 'ignore'
+    ])
+
+    df['close'] = df['close'].astype(float)
+    df['open'] = df['open'].astype(float)
+    df['high'] = df['high'].astype(float)
+    df['low'] = df['low'].astype(float)
+    return df
+
+def analyze_market(symbol, pair_name):
+    df = fetch_price_data(symbol)
+
+    rsi = RSIIndicator(close=df['close'], window=14).rsi()
+    macd = MACD(close=df['close']).macd_diff()
+    ema_21 = EMAIndicator(close=df['close'], window=21).ema_indicator()
+    ema_50 = EMAIndicator(close=df['close'], window=50).ema_indicator()
+
+    latest_rsi = rsi.iloc[-1]
+    latest_macd = macd.iloc[-1]
+    latest_ema21 = ema_21.iloc[-1]
+    latest_ema50 = ema_50.iloc[-1]
+    latest_price = df['close'].iloc[-1]
+
+    signal_type = None
+    reasons = []
+
+    if latest_rsi > 70:
+        signal_type = "SELL"
+        reasons.append("RSI > 70 (Overbought)")
+    elif latest_rsi < 30:
+        signal_type = "BUY"
+        reasons.append("RSI < 30 (Oversold)")
+
+    if latest_macd > 0:
+        reasons.append("MACD: Bullish crossover")
+        if signal_type is None:
+            signal_type = "BUY"
+    elif latest_macd < 0:
+        reasons.append("MACD: Bearish crossover")
+        if signal_type is None:
+            signal_type = "SELL"
+
+    if latest_ema21 > latest_ema50:
+        reasons.append("EMA Trend: Bullish")
+    else:
+        reasons.append("EMA Trend: Bearish")
+
+    if signal_type:
+        message = f"""
+📡 SHAiK BOT SIGNAL 🔥
+
+🟢 Signal Type: {signal_type}
+📊 Pair: {pair_name}
+🕒 Timeframe: 1H
 
 ────────────────────
 
-📌 *WHY This Trade?* [Complete Logic]
+📌 WHY This Trade?
 
-1. 💥 *SMC*: Break of structure + retest into Bearish OB  
-2. 🕳️ *ICT*: FVG filled, liquidity taken above high → bearish setup  
-3. 💢 *RSI = 75* → Overbought  
-4. 📉 *MACD*: Bearish crossover  
-5. 🧱 *EMA*: EMA 21 < EMA 50 → Bearish trend forming  
-6. ⚠️ *Chart Pattern*: Rising wedge breakdown confirmed  
-7. 📈 *Candle*: Bearish pinbar rejecting OB  
-8. 🧠 *Psychology*: Retail traders trapped long → Market reversing  
-9. 📉 *News*: Sentiment negative due to ETF delay rumors  
+""" + '\n'.join([f"✅ {r}" for r in reasons]) + f"""
+
+🎯 Entry: {latest_price:.2f}
+🛑 SL: Auto Calculated
+🥅 TP: Auto Calculated
+📏 Risk: 1.5% | 📐 R:R = 1:2
+🔢 Lot: 0.01
 
 ────────────────────
 
-🎯 *Trade Setup*:
+💡 Summary:
+> Based on RSI, MACD, and EMA, this is a strategic {signal_type} opportunity.
 
-📍 *Entry:* 67280.00  
-🛑 *SL:* 67600.00  
-🥅 *TP:* 65800.00  
-📏 *Risk:* 1.5% | 📐 R:R = 1:3  
-🔢 *Lot:* 0.01
+🔗 Powered by Shaik Bot 🧠
+"""
 
-────────────────────
+        bot.send_message(chat_id=CHAT_ID, text=message)
 
-💡 *Summary:*  
-> "Liquidity grab completed, SMC and ICT align perfectly. RSI and MACD agree, news sentiment negative. Smart entry for profit-taking."
+# Run for both symbols
+def run_bot():
+    analyze_market("BTCUSDT", "BTCUSD")
+    analyze_market("XAUUSDT", "XAUUSD")
 
-📬 *Sent at:* 17:40 GMT  
-🔗 *Powered by Shaik Bot 🧠*
-    """
+# Schedule every 1 hour
+schedule.every(1).hours.do(run_bot)
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
-    response = requests.post(url, data=data)
-    print(response.json())
-
-send_signal()
+print("Shaik Bot Started... 🚀")
+while True:
+    schedule.run_pending()
+    time.sleep(1)
