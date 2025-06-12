@@ -1,6 +1,12 @@
-app = "shaik-bot"
-primary_region = "sin"
+app = "shaikbot786"  # ← unique app name (tu khud ka daale)
 
-[env]
-  TELEGRAM_TOKEN = ""
-  CHAT_ID = ""
+[build]
+  image = "python:3.11-slim"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
