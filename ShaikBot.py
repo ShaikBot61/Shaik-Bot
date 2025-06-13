@@ -35,10 +35,20 @@ def fetch_price_data(symbol):
 def analyze_market(symbol, pair_name):
     df = fetch_price_data(symbol)
 
+    # ✅ Check if data has enough candles
+    if df is None or len(df) < 50:
+        print(f"Not enough data to analyze {pair_name}")
+        return
+
     rsi = RSIIndicator(close=df['close'], window=14).rsi()
     macd = MACD(close=df['close']).macd_diff()
     ema_21 = EMAIndicator(close=df['close'], window=21).ema_indicator()
     ema_50 = EMAIndicator(close=df['close'], window=50).ema_indicator()
+
+    # Again, double check
+    if rsi.isna().sum() > 0 or macd.isna().sum() > 0:
+        print(f"Indicator calculation incomplete for {pair_name}")
+        return
 
     latest_rsi = rsi.iloc[-1]
     latest_macd = macd.iloc[-1]
@@ -105,7 +115,7 @@ def run_bot():
     analyze_market("BTCUSDT", "BTCUSD")
     analyze_market("XAUUSDT", "XAUUSD")
 
-# Schedule every 1 hour
+# Schedule every 1 minute for testing
 schedule.every(1).minutes.do(run_bot)
 
 print("Shaik Bot Started... 🚀")
